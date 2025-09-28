@@ -1,0 +1,4 @@
+*.csv
+.vscode
+.cursor
+__pycache__/
