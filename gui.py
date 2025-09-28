@@ -435,15 +435,38 @@ class DataManagerGUI:
             self.status_var.set("Export failed")
 
     def export_json(self, file_path):
-        """Export data to JSON file, excluding empty string fields"""
-        # Filter out empty string fields from each item
+        """Export data to JSON file, with transformations:
+        - exclude empty string fields
+        - exclude 'id' entirely
+        - convert 'gameIds' (comma-separated string) to 'ids' (array[int])
+        """
+        # Filter and transform fields for each item
         filtered_data = []
         for item in self.data:
             filtered_item = {}
             for key, value in item.items():
-                # Only include non-empty string values
-                if value != "":
-                    filtered_item[key] = value
+                # Skip empty strings
+                if value == "":
+                    continue
+
+                # Exclude internal 'id' from export
+                if key == 'id':
+                    continue
+
+                # Transform 'gameIds' -> 'ids' as array of integers
+                if key == 'gameIds':
+                    try:
+                        ids_set = self.parse_game_ids(value) if isinstance(value, str) else set()
+                        ids_list = sorted(ids_set)
+                        if ids_list:
+                            filtered_item['ids'] = ids_list
+                    except Exception:
+                        # If parsing fails, omit ids gracefully
+                        pass
+                    continue
+
+                # Keep other values as-is
+                filtered_item[key] = value
             filtered_data.append(filtered_item)
         
         with open(file_path, 'w', encoding='utf-8') as f:
