@@ -528,6 +528,53 @@ class DataManagerGUI:
                 "Save Error", f"Failed to save project:\n{str(e)}")
             self.status_var.set("Save failed")
 
+    def migrate_project_data(self, project_data):
+        """Migrate project data from older versions for backwards compatibility
+        
+        Handles the following field name changes:
+        - stack_id -> level_group_id
+        - stack_group -> level_group
+        - used_stack_groups -> used_level_groups
+        
+        Returns tuple: (migrated_data, migration_performed)
+        """
+        # Check if this is an older version by looking for old field names
+        needs_migration = False
+        
+        # Check data items for old field names
+        if 'data' in project_data:
+            for item in project_data['data']:
+                if 'stack_id' in item or 'stack_group' in item:
+                    needs_migration = True
+                    break
+        
+        # Check used values for old field names
+        if 'used_stack_groups' in project_data:
+            needs_migration = True
+        
+        if not needs_migration:
+            return project_data, False
+        
+        # Perform migration
+        migrated_data = project_data.copy()
+        
+        # Migrate data items
+        if 'data' in migrated_data:
+            for item in migrated_data['data']:
+                # Migrate stack_id -> level_group_id
+                if 'stack_id' in item:
+                    item['level_group_id'] = item.pop('stack_id')
+                
+                # Migrate stack_group -> level_group
+                if 'stack_group' in item:
+                    item['level_group'] = item.pop('stack_group')
+        
+        # Migrate used values
+        if 'used_stack_groups' in migrated_data:
+            migrated_data['used_level_groups'] = migrated_data.pop('used_stack_groups')
+        
+        return migrated_data, True
+
     def load_project(self):
         """Load project state from file"""
         file_path = filedialog.askopenfilename(
@@ -541,6 +588,9 @@ class DataManagerGUI:
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 project_data = json.load(f)
+
+            # Migrate project data for backwards compatibility
+            project_data, migration_performed = self.migrate_project_data(project_data)
 
             # Validate project file format
             if 'data' not in project_data or 'next_id' not in project_data:
@@ -570,8 +620,13 @@ class DataManagerGUI:
             # Auto-adjust column widths
             self.auto_adjust_column_widths()
 
-            self.status_var.set(f"Project loaded from {
-                                os.path.basename(file_path)}")
+            # Set status message
+            if migration_performed:
+                self.status_var.set(f"Project loaded from {
+                                    os.path.basename(file_path)} (migrated from older version)")
+            else:
+                self.status_var.set(f"Project loaded from {
+                                    os.path.basename(file_path)}")
 
         except Exception as e:
             messagebox.showerror(
