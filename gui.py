@@ -30,8 +30,9 @@ class DataManagerGUI:
         # Track previously used values for editable columns
         self.used_categories = set()
         self.used_display_groups = set()
-        self.used_stack_groups = set()
+        self.used_level_groups = set()
         self.used_levels = set()
+        self.used_stacks = set()
 
         # Configure style
         self.setup_styles()
@@ -170,19 +171,20 @@ class DataManagerGUI:
 
         # Define columns for relic data
         self.tree['columns'] = ('id', 'gameIds', 'name', 'category', 'display_group',
-                                'stack_id', 'stack_group', 'level', 'nightfarer', 'deep', 'debuff')
+                                'level_group_id', 'level_group', 'level', 'nightfarer', 'deep', 'debuff', 'stacks')
         self.tree.column('#0', width=0, stretch=False)
         self.tree.column('id', width=30, minwidth=20)
         self.tree.column('gameIds', width=200, minwidth=80)
         self.tree.column('name', width=550, minwidth=120)
         self.tree.column('category', width=100, minwidth=80)
         self.tree.column('display_group', width=200, minwidth=80)
-        self.tree.column('stack_id', width=100, minwidth=80)
-        self.tree.column('stack_group', width=200, minwidth=80)
+        self.tree.column('level_group_id', width=100, minwidth=80)
+        self.tree.column('level_group', width=200, minwidth=80)
         self.tree.column('level', width=60, minwidth=50)
         self.tree.column('nightfarer', width=100, minwidth=80)
         self.tree.column('deep', width=60, minwidth=50)
         self.tree.column('debuff', width=60, minwidth=50)
+        self.tree.column('stacks', width=60, minwidth=50)
 
         # Define headings with sorting
         self.tree.heading('id', text='ID', anchor=tk.W,
@@ -195,10 +197,10 @@ class DataManagerGUI:
                           command=lambda: self.sort_by_column('category'))
         self.tree.heading('display_group', text='Display Group', anchor=tk.W,
                           command=lambda: self.sort_by_column('display_group'))
-        self.tree.heading('stack_id', text='Stack ID', anchor=tk.W,
-                          command=lambda: self.sort_by_column('stack_id'))
-        self.tree.heading('stack_group', text='Stack Group', anchor=tk.W,
-                          command=lambda: self.sort_by_column('stack_group'))
+        self.tree.heading('level_group_id', text='Level Group ID', anchor=tk.W,
+                          command=lambda: self.sort_by_column('level_group_id'))
+        self.tree.heading('level_group', text='Level Group', anchor=tk.W,
+                          command=lambda: self.sort_by_column('level_group'))
         self.tree.heading('level', text='Level', anchor=tk.W,
                           command=lambda: self.sort_by_column('level'))
         self.tree.heading('nightfarer', text='Nightfarer', anchor=tk.W,
@@ -207,6 +209,8 @@ class DataManagerGUI:
                           command=lambda: self.sort_by_column('deep'))
         self.tree.heading('debuff', text='Debuff', anchor=tk.W,
                           command=lambda: self.sort_by_column('debuff'))
+        self.tree.heading('stacks', text='Stacks', anchor=tk.W,
+                          command=lambda: self.sort_by_column('stacks'))
 
         # Scrollbars
         v_scrollbar = ttk.Scrollbar(
@@ -276,6 +280,7 @@ class DataManagerGUI:
         self.used_categories.clear()
         self.used_display_groups.clear()
         self.used_levels.clear()
+        self.used_stacks.clear()
 
         imported_count = 0
         skipped_count = 0
@@ -348,9 +353,8 @@ class DataManagerGUI:
         is_numeric = row.get('isNumericEffect', '').strip()
         processed['deep'] = (is_numeric == '0')
 
-        # stacks: overrideEffectId, 1000 = true, anything else = false
-        override_effect = row.get('overrideEffectId', '').strip()
-        processed['stacks'] = (override_effect == '1000')
+        # Initialize stacks as user-editable field (leave blank initially)
+        processed['stacks'] = ''
 
         # Determine nightfarer from allow columns
         allow_columns = {
@@ -375,15 +379,15 @@ class DataManagerGUI:
         else:
             processed['nightfarer'] = ''
 
-        # Stack ID from attachFilterParamId
+        # Level Group ID from attachFilterParamId
         try:
             attach_filter_param = row.get('attachFilterParamId', '').strip()
-            processed['stack_id'] = int(attach_filter_param) if attach_filter_param else 0
+            processed['level_group_id'] = int(attach_filter_param) if attach_filter_param else 0
         except (ValueError, TypeError):
-            processed['stack_id'] = 0
+            processed['level_group_id'] = 0
         
-        # Initialize new stack_group field (user-editable)
-        processed['stack_group'] = ''
+        # Initialize new level_group field (user-editable)
+        processed['level_group'] = ''
         
         # User-editable fields (leave blank initially)
         processed['category'] = ''
@@ -437,7 +441,7 @@ class DataManagerGUI:
     def export_json(self, file_path):
         """Export data to JSON file, with transformations:
         - exclude empty string fields
-        - exclude 'id' entirely
+        - exclude 'id' and 'level_group_id' entirely
         - convert 'gameIds' (comma-separated string) to 'ids' (array[int])
         """
         # Filter and transform fields for each item
@@ -449,8 +453,8 @@ class DataManagerGUI:
                 if value == "":
                     continue
 
-                # Exclude internal 'id' from export
-                if key == 'id':
+                # Exclude internal 'id' and 'level_group_id' from export
+                if key in ['id', 'level_group_id']:
                     continue
 
                 # Transform 'gameIds' -> 'ids' as array of integers
@@ -506,8 +510,9 @@ class DataManagerGUI:
                 'next_id': self.next_id,
                 'used_categories': list(self.used_categories),
                 'used_display_groups': list(self.used_display_groups),
-                'used_stack_groups': list(self.used_stack_groups),
+                'used_level_groups': list(self.used_level_groups),
                 'used_levels': list(self.used_levels),
+                'used_stacks': list(self.used_stacks),
                 'sort_column': self.sort_column,
                 'sort_reverse': self.sort_reverse
             }
@@ -550,8 +555,9 @@ class DataManagerGUI:
             # Load used values
             self.used_categories = set(project_data.get('used_categories', []))
             self.used_display_groups = set(project_data.get('used_display_groups', []))
-            self.used_stack_groups = set(project_data.get('used_stack_groups', []))
+            self.used_level_groups = set(project_data.get('used_level_groups', []))
             self.used_levels = set(project_data.get('used_levels', []))
+            self.used_stacks = set(project_data.get('used_stacks', []))
 
             # Load sort state
             self.sort_column = project_data.get('sort_column')
@@ -655,29 +661,29 @@ class DataManagerGUI:
             if item.get('debuff', False) and not item.get('category', '').strip():
                 item['category'] = 'Debuff'
         
-        # Second pass: Group items by stack_id for common text pre-filling
-        items_by_stack_id = {}
+        # Second pass: Group items by level_group_id for common text pre-filling
+        items_by_level_group_id = {}
         for item in self.data:
-            stack_id = item.get('stack_id', 0)
-            if stack_id not in items_by_stack_id:
-                items_by_stack_id[stack_id] = []
-            items_by_stack_id[stack_id].append(item)
+            level_group_id = item.get('level_group_id', 0)
+            if level_group_id not in items_by_level_group_id:
+                items_by_level_group_id[level_group_id] = []
+            items_by_level_group_id[level_group_id].append(item)
         
-        # Process each stack group
-        for stack_id, items in items_by_stack_id.items():
+        # Process each level group
+        for level_group_id, items in items_by_level_group_id.items():
             if len(items) > 1:  # Only process groups with multiple items
                 # Find common text for all items in this stack group
                 common_text = self.find_common_text([item.get('name', '') for item in items])
                 if common_text:
-                    # Apply common text to stack_group field for all items
+                    # Apply common text to level_group field for all items
                     for item in items:
-                        item['stack_group'] = common_text
+                        item['level_group'] = common_text
                 
                 # Pre-fill levels based on "+" patterns
-                self.prefill_levels_for_stack_group(items)
+                self.prefill_levels_for_level_group(items)
 
-    def prefill_levels_for_stack_group(self, items):
-        """Pre-fill levels based on '+' patterns in names for a stack group"""
+    def prefill_levels_for_level_group(self, items):
+        """Pre-fill levels based on '+' patterns in names for a level group"""
         if len(items) < 2:
             return
         
@@ -1131,12 +1137,13 @@ class DataManagerGUI:
                 item.get('name', ''),
                 item.get('category', ''),
                 item.get('display_group', ''),
-                item.get('stack_id', 0),
-                item.get('stack_group', ''),
+                item.get('level_group_id', 0),
+                item.get('level_group', ''),
                 item.get('level', ''),
                 item.get('nightfarer', ''),
                 'Yes' if item.get('deep', False) else 'No',
-                'Yes' if item.get('debuff', False) else 'No'
+                'Yes' if item.get('debuff', False) else 'No',
+                item.get('stacks', '')
             )
             self.tree.insert('', 'end', values=values, tags=(
                 'even' if i % 2 == 0 else 'odd',))
@@ -1153,7 +1160,7 @@ class DataManagerGUI:
         
         # Define columns and their minimum widths
         columns = ['id', 'gameIds', 'name', 'category', 'display_group',
-                   'stack_id', 'stack_group', 'level', 'nightfarer', 'deep', 'debuff']
+                   'level_group_id', 'level_group', 'level', 'nightfarer', 'deep', 'debuff', 'stacks']
         
         min_widths = {
             'id': 30,
@@ -1161,12 +1168,13 @@ class DataManagerGUI:
             'name': 120,
             'category': 80,
             'display_group': 80,
-            'stack_id': 80,
-            'stack_group': 80,
+            'level_group_id': 80,
+            'level_group': 80,
             'level': 50,
             'nightfarer': 80,
             'deep': 50,
-            'debuff': 50
+            'debuff': 50,
+            'stacks': 50
         }
         
         # Calculate maximum width needed for each column
@@ -1221,16 +1229,16 @@ class DataManagerGUI:
         # Handle different data types
         if column == 'id':
             return int(value) if value else 0
-        elif column in ['debuff', 'deep']:
+        elif column in ['debuff', 'deep', 'stacks']:
             # Boolean columns - sort True before False
             return bool(value)
-        elif column in ['level', 'stack_id']:
+        elif column in ['level', 'level_group_id']:
             # Integer columns - handle empty strings
             try:
                 return int(value) if value else 0
             except (ValueError, TypeError):
                 return 0
-        elif column == 'stack_group':
+        elif column == 'level_group':
             # String column - case insensitive
             return str(value).lower()
         elif column == 'gameIds':
@@ -1249,7 +1257,7 @@ class DataManagerGUI:
     def update_sort_indicators(self):
         """Update column headers to show sort direction"""
         # Reset all headers
-        for col in ['id', 'gameIds', 'name', 'debuff', 'deep', 'stack_group', 'nightfarer', 'category', 'display_group', 'level']:
+        for col in ['id', 'gameIds', 'name', 'debuff', 'deep', 'stacks', 'level_group', 'nightfarer', 'category', 'display_group', 'level']:
             if col == 'id':
                 text = 'ID'
             elif col == 'gameIds':
@@ -1260,8 +1268,10 @@ class DataManagerGUI:
                 text = 'Debuff'
             elif col == 'deep':
                 text = 'Deep'
-            elif col == 'stack_group':
-                text = 'Stack Group'
+            elif col == 'stacks':
+                text = 'Stacks'
+            elif col == 'level_group':
+                text = 'Level Group'
             elif col == 'nightfarer':
                 text = 'Nightfarer'
             elif col == 'category':
@@ -1290,7 +1300,7 @@ class DataManagerGUI:
         # Get column name from column index
         column_index = int(column.replace('#', '')) - 1
         columns = ['id', 'gameIds', 'name', 'category', 'display_group',
-                   'stack_id', 'stack_group', 'level', 'nightfarer', 'deep', 'debuff']
+                   'level_group_id', 'level_group', 'level', 'nightfarer', 'deep', 'debuff', 'stacks']
 
         if column_index < 0 or column_index >= len(columns):
             return
@@ -1298,7 +1308,7 @@ class DataManagerGUI:
         column_name = columns[column_index]
 
         # Only show context menu for editable columns
-        if column_name not in ['category', 'display_group', 'stack_group', 'level']:
+        if column_name not in ['category', 'display_group', 'level_group', 'level', 'stacks']:
             return
 
         # Get selected items (including the clicked item if not selected)
@@ -1341,31 +1351,64 @@ class DataManagerGUI:
 
         # Add special option for display_group column
         if column_name == 'display_group':
-            # Check if all selected rows have the same stack_group
-            stack_groups = set()
+            # Check if all selected rows have the same level_group
+            level_groups = set()
             for item in selected_items:
                 item_index = self.tree.index(item)
                 if 0 <= item_index < len(self.data):
-                    stack_group = self.data[item_index].get('stack_group', '').strip()
-                    if stack_group:
-                        stack_groups.add(stack_group)
+                    level_group = self.data[item_index].get('level_group', '').strip()
+                    if level_group:
+                        level_groups.add(level_group)
             
-            if len(stack_groups) == 1 and stack_groups:
-                # All selected rows have the same non-empty stack_group
-                stack_group_value = list(stack_groups)[0]
+            if len(level_groups) == 1 and level_groups:
+                # All selected rows have the same non-empty level_group
+                level_group_value = list(level_groups)[0]
                 if len(selected_items) > 1:
                     context_menu.add_command(
-                        label=f"Use Stack Group: {stack_group_value} ({len(selected_items)} rows)",
+                        label=f"Use Level Group: {level_group_value} ({len(selected_items)} rows)",
                         command=lambda: self.set_cell_value(
-                            selected_items, column_name, stack_group_value)
+                            selected_items, column_name, level_group_value)
                     )
                 else:
                     context_menu.add_command(
-                        label=f"Use Stack Group: {stack_group_value}",
+                        label=f"Use Level Group: {level_group_value}",
                         command=lambda: self.set_cell_value(
-                            selected_items, column_name, stack_group_value)
+                            selected_items, column_name, level_group_value)
                     )
                 context_menu.add_separator()
+
+        # Add special options for stacks column
+        if column_name == 'stacks':
+            context_menu.add_separator()
+            # Add Yes option
+            if len(selected_items) > 1:
+                context_menu.add_command(
+                    label=f"Set to Yes ({len(selected_items)} rows)",
+                    command=lambda: self.set_cell_value(
+                        selected_items, column_name, "Yes")
+                )
+            else:
+                context_menu.add_command(
+                    label="Set to Yes",
+                    command=lambda: self.set_cell_value(
+                        selected_items, column_name, "Yes")
+                )
+            
+            # Add No option
+            if len(selected_items) > 1:
+                context_menu.add_command(
+                    label=f"Set to No ({len(selected_items)} rows)",
+                    command=lambda: self.set_cell_value(
+                        selected_items, column_name, "No")
+                )
+            else:
+                context_menu.add_command(
+                    label="Set to No",
+                    command=lambda: self.set_cell_value(
+                        selected_items, column_name, "No")
+                )
+            
+            context_menu.add_separator()
 
         # Add separator
         context_menu.add_separator()
@@ -1402,10 +1445,12 @@ class DataManagerGUI:
             return self.used_categories
         elif column_name == 'display_group':
             return self.used_display_groups
-        elif column_name == 'stack_group':
-            return self.used_stack_groups
+        elif column_name == 'level_group':
+            return self.used_level_groups
         elif column_name == 'level':
             return self.used_levels
+        elif column_name == 'stacks':
+            return self.used_stacks
         return set()
 
     def edit_cell_value(self, items, column_name, current_value):
@@ -1480,10 +1525,12 @@ class DataManagerGUI:
             self.used_categories.add(new_value.strip())
         elif column_name == 'display_group':
             self.used_display_groups.add(new_value.strip())
-        elif column_name == 'stack_group':
-            self.used_stack_groups.add(new_value.strip())
+        elif column_name == 'level_group':
+            self.used_level_groups.add(new_value.strip())
         elif column_name == 'level':
             self.used_levels.add(new_value.strip())
+        elif column_name == 'stacks':
+            self.used_stacks.add(new_value.strip())
 
         # Refresh the treeview
         self.refresh_treeview()
