@@ -443,6 +443,7 @@ class DataManagerGUI:
         - exclude empty string fields
         - exclude 'id' and 'level_group_id' entirely
         - convert 'gameIds' (comma-separated string) to 'ids' (array[int])
+        - convert 'stacks' ('Yes'/'No' string) to boolean (true/false)
         """
         # Filter and transform fields for each item
         filtered_data = []
@@ -467,6 +468,15 @@ class DataManagerGUI:
                     except Exception:
                         # If parsing fails, omit ids gracefully
                         pass
+                    continue
+
+                # Transform 'stacks' -> boolean
+                if key == 'stacks':
+                    if value == 'Yes':
+                        filtered_item[key] = True
+                    elif value == 'No':
+                        filtered_item[key] = False
+                    # Skip if blank (empty string) - already handled by empty string check above
                     continue
 
                 # Keep other values as-is
